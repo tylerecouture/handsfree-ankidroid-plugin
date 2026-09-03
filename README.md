@@ -1,12 +1,11 @@
-# handsfree-ankidroid-plugin (AnkiVoice)
+# AnkiVoice
 
-Hands-free voice review for **AnkiDroid**. It reads each card aloud, listens for
+Hands-free plugin for **AnkiDroid**. It reads each card aloud, listens for
 your voice, and lets you drive a whole review session without touching the phone:
 
 1. The **question** is read aloud.
 2. You say **"answer"** → the answer is read aloud.
-3. You say a grade — **again / hard / good / easy** — and it schedules the card,
-   announces the next interval, and moves on.
+3. You say a grade: **again / hard / good / easy** and it schedules the card,announces the next interval, and moves on.
 
 Plus **skip**, **repeat**, **pause** (a timed think-break), **help**, and **off**.
 It also keeps the screen awake while you're actively reviewing and lets it sleep
