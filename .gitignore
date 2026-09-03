@@ -1,0 +1,16 @@
+# build artifacts
+demo/*.apkg
+*.apkg
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+# node
+node_modules/
+# os / editors
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
