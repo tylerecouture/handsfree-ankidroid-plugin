@@ -22,6 +22,21 @@ separate app**. It runs entirely inside AnkiDroid's built-in JavaScript API.
 
 ---
 
+## Download
+
+Every version is published as a [GitHub release](https://github.com/tylerecouture/handsfree-ankidroid-plugin/releases/latest),
+with two files attached:
+
+| File | For |
+|---|---|
+| `_ankivoice.js` | the plugin itself — what you put in `collection.media` |
+| `AnkiVoice-test.apkg` | a 3-card test deck with the script bundled, to try it on the phone |
+
+Releases are built automatically whenever the version changes, so the assets
+always match the source at that tag.
+
+---
+
 ## Requirements
 
 - **AnkiDroid 2.18+** (uses JS API contract 0.0.3).
@@ -161,7 +176,9 @@ demo/build_apkg.py   builds a test .apkg with the script bundled as media
 test/test.js         pure-function test suite (no dependencies)
 test/smoke.js        whole-plugin test against a fake DOM + fake JS API (jsdom)
 package.json         dev tooling only - nothing is bundled or shipped
-.github/workflows/   CI: syntax check, both suites, version consistency, demo build
+tools/               release-notes helper used by the release workflow
+.github/workflows/   CI (checks + both suites + demo build) and Release
+                     (publishes _ankivoice.js + the test deck on a version bump)
 LICENSE              MIT
 ```
 

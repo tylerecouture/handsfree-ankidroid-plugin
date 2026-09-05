@@ -47,12 +47,26 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Read the plugin version
+        id: v
+        run: |
+          VERSION="$(sed -n 's/^[[:space:]]*VERSION:[[:space:]]*\([0-9]\{1,\}\).*/\1/p' _ankivoice.js | head -1)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # Fail here rather than at release time: a version bump with no matching
+      # CHANGELOG section would otherwise publish a release with empty notes.
+      - name: Release notes exist for this version
+        run: python3 tools/release_notes.py "${{ steps.v.outputs.version }}"
+
       - name: Build the test deck
         run: |
           pip install -r demo/requirements.txt
           python demo/build_apkg.py
 
+      # Handy for testing a PR before it merges. Note GitHub zips artifacts and
+      # requires a login to download them - the published release is the channel
+      # meant for actual users.
       - uses: actions/upload-artifact@v4
         with:
-          name: AnkiVoice-test-deck
+          name: AnkiVoice-test-deck-v${{ steps.v.outputs.version }}
           path: demo/AnkiVoice-test.apkg

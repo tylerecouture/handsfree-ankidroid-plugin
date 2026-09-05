@@ -1,0 +1,82 @@
+name: Release
+
+# Publishes a downloadable build whenever the plugin's version changes on main.
+#
+# CI artifacts are not usable as a distribution channel: they need a GitHub
+# login, they expire, and upload-artifact always zips - so a user on a phone
+# gets a .zip they have to extract before AnkiDroid can import it. A release
+# asset is a direct, permanent, login-free download.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "_ankivoice.js"
+      - "CHANGELOG.md"
+      - "demo/**"
+      - ".github/workflows/release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Read the plugin version
+        id: v
+        run: |
+          VERSION="$(sed -n 's/^[[:space:]]*VERSION:[[:space:]]*\([0-9]\{1,\}\).*/\1/p' _ankivoice.js | head -1)"
+          if [ -z "$VERSION" ]; then
+            echo "::error::could not read VERSION from _ankivoice.js"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Plugin version: v$VERSION"
+
+      # A version bump is what makes a release. Re-running on an unchanged
+      # version is a no-op rather than an error, so unrelated pushes to main
+      # (docs, tooling) don't fail the workflow.
+      - name: Has this version already been released?
+        id: existing
+        run: |
+          if git rev-parse "refs/tags/${{ steps.v.outputs.tag }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "${{ steps.v.outputs.tag }} already exists - nothing to publish."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build the test deck
+        if: steps.existing.outputs.exists == 'false'
+        run: |
+          pip install -r demo/requirements.txt
+          python demo/build_apkg.py
+
+      - name: Write the release notes
+        if: steps.existing.outputs.exists == 'false'
+        run: |
+          python3 tools/release_notes.py "${{ steps.v.outputs.version }}" > /tmp/notes.md
+          cat tools/release_footer.md >> /tmp/notes.md
+          cat /tmp/notes.md
+
+      - name: Publish
+        if: steps.existing.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.v.outputs.tag }}" \
+            --title "AnkiVoice ${{ steps.v.outputs.tag }}" \
+            --notes-file /tmp/notes.md \
+            _ankivoice.js \
+            demo/AnkiVoice-test.apkg
