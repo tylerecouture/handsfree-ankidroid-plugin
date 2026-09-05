@@ -1,11 +1,13 @@
 # AnkiVoice
 
+[![CI](https://github.com/tylerecouture/handsfree-ankidroid-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/tylerecouture/handsfree-ankidroid-plugin/actions/workflows/ci.yml)
+
 Hands-free plugin for **AnkiDroid**. It reads each card aloud, listens for
 your voice, and lets you drive a whole review session without touching the phone:
 
 1. The **question** is read aloud.
 2. You say **"answer"** → the answer is read aloud.
-3. You say a grade: **again / hard / good / easy** and it schedules the card,announces the next interval, and moves on.
+3. You say a grade: **again / hard / good / easy** and it schedules the card, announces the next interval, and moves on.
 
 Plus **skip**, **repeat**, **pause** (a timed think-break), **help**, and **off**.
 It also keeps the screen awake while you're actively reviewing and lets it sleep
@@ -26,8 +28,10 @@ separate app**. It runs entirely inside AnkiDroid's built-in JavaScript API.
 - AnkiDroid granted the **Microphone** permission (Android app settings).
 - AnkiDroid setting **Reviewing → "Show next review time above answer buttons"**
   turned on (that's the data the plugin reads to announce intervals).
-- English cards by default (the recognition language is `en-US`; change it in the
-  script if needed).
+- English cards by default. The spoken and recognition languages are both
+  settings now (⚙ → *Speech language* / *Recognition language*), so a French deck
+  can be read in French; whether the *recognition* language can be changed
+  depends on your AnkiDroid build, and it falls back to the device default.
 
 ## Install
 
@@ -82,10 +86,18 @@ Every trigger word above is **editable in Settings** (see below).
 - The **⚙ gear** on the far right opens the settings panel:
   - Timing (wait before the mic, "pause" length, retries before it auto-pauses),
     "keep screen awake", and other toggles.
-  - **Editable trigger words per command.** Each command shows its full word
-    list; add words (comma-separated), or **Reset defaults** to restore them.
+  - **Editable trigger words per command**, as tappable chips. Tap a word to
+    remove it; tap a **+ word** chip under *heard recently* to add something the
+    recognizer just misheard. No typing required — the on-screen keyboard does
+    not reliably open inside AnkiDroid's reviewer WebView. There is still a text
+    field for where it does, and **Reset defaults** restores the built-in lists.
   - **Voice test** — shows the recognizer's raw guesses for whatever you say,
     while still reviewing normally.
+  - **Speech / recognition language** for non-English decks.
+  - **Announce next interval** — turn it off to grade faster (it skips
+    "next review in four days" after each card).
+  - **Unknown replies before pausing** — how much unrecognized speech to tolerate
+    before the mic parks itself, so background noise can't loop it forever.
 - Settings are **persistent** across app restarts (stored in a cookie — see the
   FAQ for why not `localStorage`).
 
@@ -97,17 +109,30 @@ this yourself without editing the script:
 1. Settings → turn on **Voice test**.
 2. Say the stubborn word (e.g. "hard"). Read the yellow readout — it lists what
    the engine actually heard (e.g. `heart | art | harv`).
-3. Settings → **Extra words → Hard** → add the mis-hears (`harv`, etc.).
+3. Settings → find **Extra words → Hard**. The words it just heard are waiting
+   there as **+ chips** — tap `+ harv` to add it. (Tap an existing word to
+   remove it.)
 4. Turn Voice test off. That word now works for your voice.
 
 ## Development
 
 - The deployable artifact is the single file `_ankivoice.js`. The version lives
   in its header comment and in [`CHANGELOG.md`](CHANGELOG.md).
-- **Tests:** `node test/test.js` runs the pure-function suite (interval speech,
-  line-break handling, answer extraction, command matching) against the real
-  source. Most of the plugin is WebView/AnkiDroid-bound and can only be verified
-  on a device.
+- **Tests:** two suites, no build step.
+  - `node test/test.js` — pure functions (interval speech, line-break handling,
+    answer extraction, command matching, normalization), run against the real
+    source, plus a check that the version in the file header matches
+    `CHANGELOG.md`. No dependencies.
+  - `node test/smoke.js` — loads the *whole* plugin into a fake DOM with a fake
+    AnkiDroid JS API and drives a review: reads a question, hears a mis-heard
+    grade, reveals, grades, parks the mic on noise, edits settings by tapping
+    chips. Needs jsdom (`npm install`), and skips cleanly if it isn't there.
+  - `npm test` runs both plus `node --check`. CI runs both on every push, along
+    with a demo-deck build.
+
+  None of this can stand in for a device: the speech engine, the WebView quirks
+  and the keyboard behaviour only exist on the phone. It catches regressions in
+  the parts that *can* be reasoned about off-device.
 - Coding style is intentionally conservative ES5-ish — it runs inside whatever
   Android System WebView the user has.
 - See [`CLAUDE.md`](CLAUDE.md) for an architecture + context handoff (useful for
@@ -124,7 +149,10 @@ CHANGELOG.md         version history (mirrors the file header)
 CLAUDE.md            architecture + context handoff
 docs/DECISIONS.md    why the code is shaped the way it is (technical)
 demo/build_apkg.py   builds a test .apkg with the script bundled as media
-test/test.js         pure-function test suite (node test/test.js)
+test/test.js         pure-function test suite (no dependencies)
+test/smoke.js        whole-plugin test against a fake DOM + fake JS API (jsdom)
+package.json         dev tooling only - nothing is bundled or shipped
+.github/workflows/   CI: syntax check, both suites, version consistency, demo build
 LICENSE              MIT
 ```
 
@@ -177,6 +205,16 @@ better, purpose-built models. We can't switch AnkiDroid's model from a card, so
 instead every command has an **editable list of trigger words** plus a **Voice
 test** mode: you can see exactly what your device hears and add those spellings.
 
+**Why can't I type in the settings panel?**
+The on-screen keyboard often doesn't open for text fields inside AnkiDroid's
+reviewer WebView — the reviewer's own stylesheet disables text selection on the
+card body so that swipes don't select text, and that appears to take the caret
+with it. v29 overrides that on its own inputs, but rather than depend on a fix
+that can't be verified off-device, the word lists are fully editable by tapping:
+each word is a chip you tap to delete, and words the recognizer recently heard
+show up as **+ chips** to add. That's the intended way to tune vocabulary; the
+text field is a bonus where the keyboard cooperates.
+
 **Why do settings live in a cookie instead of `localStorage`?**
 AnkiDroid's internal media server binds a **random port each launch**, so the
 card's origin is `http://127.0.0.1:<random>`. `localStorage` is keyed to that
@@ -209,9 +247,12 @@ Reading "the card minus the question side" gets the right text for all of them,
 with the after-`<hr>` text as a fallback.
 
 **Why is "detect the spoken answer and auto-grade" turned off by default?**
-It's in Settings if you want it, but the recognizer isn't reliable enough for
-free-form answers to trust with automatic grading, and stray sounds could trigger
-false reveals. Off by default is the safe choice.
+Partly caution — stray sounds can trigger a false reveal — but mostly it was
+broken. The recognizer returns several competing guesses, and until v29 they were
+mashed into one string before being compared to the answer, which matched nothing
+and also blew past the "max words" limit. It was switched off in v24 because it
+"didn't work"; v29 fixed the underlying bug, so it's worth another try if the
+idea appeals. Still off by default until it has real mileage on it.
 
 **Could this be fixed properly?**
 Two upstream changes to AnkiDroid would help a lot: (1) add silence-length extras

@@ -1,7 +1,12 @@
 <!-- AnkiVoice loader — paste this at the very bottom of BOTH the Front and Back
      template of every note type you want voiced. It fetches _ankivoice.js from
      collection.media and runs it. Update the plugin by replacing _ankivoice.js;
-     this snippet never needs to change. Inert on Anki Desktop / AnkiWeb. -->
+     this snippet never needs to change. Inert on Anki Desktop / AnkiWeb.
+
+     A plain <script src="_ankivoice.js"></script> ought to work here and would be
+     simpler, but this fetch+eval form is the one that has actually been verified
+     on-device, and it surfaces a load failure on screen instead of failing
+     silently. See docs/DECISIONS.md before swapping it. -->
 <script>
 (function(){
   function boot(){

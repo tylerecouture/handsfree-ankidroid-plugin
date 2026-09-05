@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # The plugin can only be exercised for real on an AnkiDroid device, so CI
+      # covers what is checkable off-device: it parses, the pure functions behave,
+      # and the version in the header matches CHANGELOG.md.
+      - name: Syntax check
+        run: node --check _ankivoice.js
+
+      - name: Pure-function tests
+        run: node test/test.js
+
+      # Loads the whole plugin into a fake DOM with a fake AnkiDroid JS API and
+      # drives a review. Optional dependency: test/smoke.js skips if it is absent.
+      - name: DOM smoke test
+        run: |
+          npm install --no-save --no-fund --no-audit jsdom
+          node test/smoke.js
+
+      - name: Shipped file stays ASCII (Unicode must use \uXXXX escapes)
+        run: |
+          if LC_ALL=C grep -nP '[^\x00-\x7E]' _ankivoice.js; then
+            echo "::error::_ankivoice.js contains literal non-ASCII; use \\uXXXX escapes"
+            exit 1
+          fi
+
+  demo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build the test deck
+        run: |
+          pip install -r demo/requirements.txt
+          python demo/build_apkg.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AnkiVoice-test-deck
+          path: demo/AnkiVoice-test.apkg

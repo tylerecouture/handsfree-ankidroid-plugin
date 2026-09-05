@@ -12,30 +12,18 @@ Usage:
     pip install -r demo/requirements.txt
     python demo/build_apkg.py           # writes demo/AnkiVoice-test.apkg
 """
+import io
 import os
+
 import genanki
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JS = os.path.join(ROOT, "_ankivoice.js")
 
-LOADER = (
-    '\n<script>\n'
-    '(function(){\n'
-    '  function boot(){\n'
-    '    fetch("_ankivoice.js")\n'
-    '      .then(function(r){return r.text();})\n'
-    '      .then(function(code){ (0,eval)(code); })\n'
-    '      .catch(function(e){\n'
-    '        var d=document.createElement("div");\n'
-    '        d.style.cssText="position:fixed;bottom:0;left:0;right:0;padding:6px;background:#a00;color:#fff;z-index:9999";\n'
-    '        d.textContent="AV loader failed: "+e;\n'
-    '        document.body.appendChild(d);\n'
-    '      });\n'
-    '  }\n'
-    '  if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",boot);}else{boot();}\n'
-    '})();\n'
-    '</script>'
-)
+# Read the loader from the repo rather than duplicating it here - two copies of
+# the same snippet drift, and the .apkg is what gets tested on the device.
+with io.open(os.path.join(ROOT, "loader.html"), encoding="utf-8") as fh:
+    LOADER = "\n" + fh.read().strip()
 
 CSS = ".card{font-family:sans-serif;font-size:22px;text-align:center;} small{opacity:.6;}"
 
