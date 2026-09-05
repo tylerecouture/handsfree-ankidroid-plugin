@@ -1,0 +1,13 @@
+{
+  "private": true,
+  "name": "ankivoice",
+  "description": "Dev tooling only. The deployable artifact is the single file _ankivoice.js; nothing here is bundled, built, or shipped to the device.",
+  "license": "MIT",
+  "scripts": {
+    "check": "node --check _ankivoice.js",
+    "test": "node --check _ankivoice.js && node test/test.js && node test/smoke.js"
+  },
+  "devDependencies": {
+    "jsdom": "^26.0.0"
+  }
+}

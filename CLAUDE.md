@@ -17,8 +17,13 @@ on Desktop/AnkiWeb the API is absent and the script hides itself.
 WebView JS API, which only exists on-device. The dev loop is:
 
 1. Edit `_ankivoice.js`.
-2. `node --check _ankivoice.js` and `node test/test.js` (pure functions only).
+2. `npm test` — `node --check`, then `test/test.js` (pure functions, no deps),
+   then `test/smoke.js` (whole plugin against a fake DOM + fake JS API; needs
+   jsdom, skips without it).
 3. Manual verification on a physical AnkiDroid device by the maintainer.
+
+The smoke test raises the floor but does not replace step 3: jsdom is not the
+Android System WebView, and the fake API is a guess at the real one's shape.
 
 Do **not** assume browser/Node behavior maps to AnkiDroid's WebView. Several
 past bugs came from exactly that. See `docs/DECISIONS.md` → "Dead ends" and
@@ -44,18 +49,32 @@ One IIFE in `_ankivoice.js`, roughly in this order:
 - **Text extraction**: `textWithBreaks` → `extractLines` → `speechJoin`
   (line breaks become spoken pauses; `<small>` and `av-*` excluded);
   `subtractLines` (answer = card lines minus question lines); `hrLines` fallback.
+- **Normalization**: `normalize` (lowercase, NFKD, drop combining marks, strip
+  punctuation via `AV_PUNCT`) — accent-folding but script-preserving. Everything
+  that compares heard speech to text goes through it.
 - **Interval → speech**: `expandIvl` (+ `unwrapValue`, `AV_UNITS`).
-- **Vocab matching**: `said(heard, key)` — a command fires if the heard text
-  contains any word from `CFG.words_<key>` (the editable list).
+- **Vocab matching**: `said(heard, key)` — `heard` is the recognizer's *array of
+  hypotheses* (a bare string is also accepted). A command fires if any single
+  hypothesis contains any word from `CFG.words_<key>`. Testing hypotheses
+  separately matters: see DECISIONS.
+- **Spoken answers**: `readAttempts` / `anyAnswerMatches` / `answerMatches` —
+  again, per hypothesis. `rememberHeard` / `recentHeard` keep the last 24 heard
+  words so the settings panel can offer one-tap "add this mis-hear" chips.
 - **`commandsText`** — spoken command help / first-card prompt.
-- **`startFlow()`** — the per-card state machine. Uses a generation counter
+- **`startFlow(resume)`** — the per-card state machine. Uses a generation counter
   (`window.__avGen` + local `myGen`, `dead()`) to invalidate stale async work, a
   per-flow `listening` flag to guarantee one recognizer at a time, `speak`,
-  `grade`, `countdown`, `listen`, and the `window.ankiSttResult` handler.
+  `grade`, `countdown`, `listen`, `pauseMic`, and the `window.ankiSttResult`
+  handler. Two counters decide when to park the mic: `tries` (silence) and
+  `noMatch` (heard something, recognised nothing). **`resume === true` skips the
+  reading phase** and opens the mic immediately — used when un-pausing by tap and
+  when closing the settings panel.
 - **`stopFlow`, `onTap`** — toggle/stop logic.
 - **Settings panel** — `AV_SETTINGS` (spec list), `saveCfg/resetCfg`,
   `buildPanel`, `openSettings/closeSettings`. Setting types: `bool`, `num`,
-  `words` (text field).
+  `text` (plain field, e.g. language) and `words` (tappable chips + a text
+  field). `saveCfg` refuses to write a cookie over ~3.8 KB and reports it via
+  `setNote`.
 - **`visibilitychange`** — stop everything when Anki backgrounds; re-acquire wake
   lock on return.
 - **init IIFE** — waits up to 2s for `AnkiDroidJS` (bare name!); if absent, hides
@@ -71,9 +90,16 @@ answer → say "Mark it" → short delay → listen → a grade word calls
 
 ## Conventions
 
-- **ES5-ish only.** Runs in whatever Android System WebView the user has. No
-  optional chaining, no `let`/`const` in the shipped file if avoidable, etc.
-  (Existing code uses `var` and function declarations deliberately.)
+- **ES5 *style*, not ES5 *target*.** The shipped file uses `var`, function
+  declarations, no arrow functions and no optional chaining — keep it that way.
+  But it does rely on `async`/`await`, `Promise`, `String.prototype.normalize`,
+  `navigator.wakeLock` and CSS `inset`, so the real floor is about Chrome 87 /
+  Android 10 WebView. The style rule is for readability and safe `eval`, not for
+  supporting ancient devices; don't "fix" it by rewriting promises into
+  callbacks.
+- **The shipped file is pure ASCII.** Every non-ASCII character is a `\uXXXX`
+  escape (CI enforces this), because the file is fetched and `eval`'d and has
+  been mangled by encoding round-trips before.
 - **Fixed filename `_ankivoice.js`.** Never rename — templates reference it.
 - **Version** lives in the header comment (`VERSION:`) and `CHANGELOG.md`. Bump
   both on any change.
@@ -93,19 +119,30 @@ answer → say "Mark it" → short delay → listen → a grade word calls
   stopping the first; the `listening` flag + stop-on-new-flow handle it.
 - Each card side is a **full page reload** — no memory persists across sides.
 - Server port is **random per launch** — `localStorage` is not durable; settings
-  use a cookie.
+  use a cookie (which has a ~4 KB ceiling shared by all the word lists).
+- `ankiSttResult` receives a **list of competing hypotheses**, not one string.
+  Never join them before matching — that was a real, long-lived bug.
+- The handler is `async`, so **anything it throws vanishes** into an unhandled
+  rejection and the mic never reopens. Guard every parse.
+- The reviewer's CSS sets `user-select:none` on the card body, which appears to
+  block the **on-screen keyboard** in our settings inputs. Word lists must stay
+  editable without typing (the chip UI).
 
 ## How to make and ship a change
 
 1. Edit `_ankivoice.js`; bump `VERSION:` and add a `CHANGELOG.md` entry (and the
-   header changelog).
-2. `node --check _ankivoice.js && node test/test.js`.
+   header changelog). A test asserts these three agree, so drift fails CI.
+2. `npm test` (or `node test/test.js` alone if jsdom isn't installed).
 3. Deploy: replace `_ankivoice.js` in `collection.media` (desktop), sync desktop,
    sync AnkiDroid. Verify on device.
 
 ## Open threads / roadmap
 
 - Optional raw-URL loader for auto-deploy-on-commit (CORS already works).
+- Verify on-device (v29 changes that CLI tests cannot reach): does the keyboard
+  now open in the settings text fields? does `ankiSttSetLanguage` exist on this
+  JS API version? does "detect spoken answers" behave now that hypotheses are
+  matched separately?
 - Per-side TTS language for language decks (`ankiTtsSetLanguage`).
 - Upstream AnkiDroid patch to reduce beeps (silence-length extras + recognizer
   `destroy()`), and a bigger one to enable `getUserMedia`

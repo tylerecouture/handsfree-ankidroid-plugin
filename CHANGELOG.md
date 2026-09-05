@@ -2,7 +2,46 @@
 
 Versions are tracked in the header of `_ankivoice.js` and mirrored here.
 
-Current: **v28**
+Current: **v29**
+
+## v29
+
+Correctness pass over the recognizer path.
+
+- **"Detect spoken answers" actually works now.** The recognizer returns several
+  competing hypotheses; they were being concatenated into one string before
+  matching, which produced a phrase that matched no answer line and also
+  overshot the "max words for answer match" limit, so the feature could almost
+  never fire. Each hypothesis is now tested on its own.
+- **A malformed recognizer result can no longer kill the session.** Parsing the
+  hypothesis list was unguarded, and because the callback is `async` any
+  exception became an unhandled rejection: the microphone simply never reopened
+  until you tapped the bar.
+- **Noise can no longer loop the microphone forever.** Only *silent* listening
+  windows counted towards the auto-pause, so a television or a nearby
+  conversation produced an endless recognize-restart cycle that also held the
+  screen wake lock. Recognized-but-unknown replies now count too, via the new
+  "Unknown replies before pausing" setting.
+- **Command matching ignores punctuation and folds accents**, and no longer
+  destroys non-Latin text, so trigger words survive what the engine returns.
+- **Tapping to un-pause, or closing the settings, resumes listening** instead of
+  re-reading the whole card from the top.
+- **Word lists are editable without the keyboard.** Each trigger word is a chip
+  you tap to remove, and words the recognizer recently heard appear as one-tap
+  "+" chips to add. (The on-screen keyboard does not reliably open for text
+  fields inside AnkiDroid's reviewer WebView; the text field is still there for
+  where it does.)
+- **The bar no longer covers the bottom of a card** - its height is reserved at
+  the end of the document.
+- TTS no longer waits a flat 700 ms per utterance, and no longer gives up on an
+  answer that takes over a minute to read (it used to open the microphone over
+  its own voice).
+- Table cells are spoken as separate lines instead of running together.
+- New settings: **speech language** and **recognition language** (for non-English
+  decks), **announce next interval** (turn off for faster grading), and
+  **unknown replies before pausing**.
+- Settings that are too large to fit in the persistence cookie now say so in the
+  panel instead of silently reverting on the next app start.
 
 ## v28
 
@@ -26,7 +65,7 @@ spoken-answer auto-marking is now OFF by default (it was unreliable); still avai
 
 ## v23
 
-reveal ("answer") is now recognised from any word starting with "answ" (answer/answers/answered) plus phonetic variants, so it triggers on the first try instead of falling through to the answer-attempt path.
+reveal ("answer") is now recognised from any word starting with "answ" (answer/answers/answered) plus phonetic variants, so it triggers on the first try instead of falling through to the answer-attempt path. *(Superseded in v27: prefix matching was replaced by the editable per-command word lists. The shipped default list for "answer" covers answer/answers/answered/anser/ansa/ansr/show/reveal/flip.)*
 
 ## v22
 

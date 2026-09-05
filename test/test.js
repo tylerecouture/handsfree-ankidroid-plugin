@@ -14,18 +14,29 @@ const fs = require("fs");
 const path = require("path");
 const assert = require("assert");
 
-const src = fs.readFileSync(path.join(__dirname, "..", "_ankivoice.js"), "utf8");
+const ROOT = path.join(__dirname, "..");
+const src = fs.readFileSync(path.join(ROOT, "_ankivoice.js"), "utf8");
+const changelog = fs.readFileSync(path.join(ROOT, "CHANGELOG.md"), "utf8");
 
 // --- pull a top-level `function NAME(...) { ... }` out of the source ---
+// Brace-matched rather than regex-terminated, so one-line helpers and nested
+// blocks both come out whole. (Assumes no braces inside string/regex literals
+// in the extracted functions; if that ever changes, eval below fails loudly.)
 function grab(name) {
-  const re = new RegExp("function " + name + "\\([\\s\\S]*?\\n  }\\n");
-  const m = src.match(re);
-  if (!m) throw new Error("could not extract function " + name);
-  return m[0];
+  const start = src.indexOf("function " + name + "(");
+  if (start < 0) throw new Error("could not find function " + name);
+  const open = src.indexOf("{", start);
+  if (open < 0) throw new Error("could not find body of " + name);
+  let depth = 0, i = open;
+  for (; i < src.length; i++) {
+    if (src[i] === "{") depth++;
+    else if (src[i] === "}" && --depth === 0) { i++; break; }
+  }
+  if (depth !== 0) throw new Error("unbalanced braces in " + name);
+  return src.slice(start, i);
 }
 function grabVar(name) {
-  const re = new RegExp("var " + name + " = [\\s\\S]*?;\\n");
-  const m = src.match(re);
+  const m = src.match(new RegExp("var " + name + " = [\\s\\S]*?;\\n"));
   if (!m) throw new Error("could not extract var " + name);
   return m[0];
 }
@@ -34,12 +45,14 @@ function grabVar(name) {
 let CFG = {};
 eval(grabVar("AV_BLOCK"));
 eval(grabVar("AV_UNITS"));
+eval(grabVar("AV_PUNCT"));
 eval(grab("textWithBreaks"));
 eval(grab("extractLines"));
 eval(grab("speechJoin"));
 eval(grab("subtractLines"));
 eval(grab("normalize"));
 eval(grab("answerMatches"));
+eval(grab("anyAnswerMatches"));
 eval(grab("expandIvl"));
 eval(grab("unwrapValue"));
 eval(grab("said"));
@@ -65,9 +78,11 @@ eq("expandIvl 1d", expandIvl("1d"), "1 day");
 eq("expandIvl <4m", expandIvl("<4m"), "less than 4 minutes");
 eq("expandIvl 1.6mo", expandIvl("1.6mo"), "1.6 months");
 eq("expandIvl 1y", expandIvl("1y"), "1 year");
-eq("expandIvl zero-width", expandIvl("16\u200bm"), "16 minutes");
+eq("expandIvl zero-width", expandIvl("16​m"), "16 minutes");
 eq("unwrapValue raw json", unwrapValue('{"success":true,"value":"10m"}'), "10m");
 eq("unwrapValue bare", unwrapValue("10m"), "10m");
+eq("unwrapValue object", unwrapValue({ success: true, value: "true" }), "true");
+eq("unwrapValue false-ish", unwrapValue({ success: true, value: false }), "");
 
 // ---------------- line-break -> pause ----------------
 eq("br makes pause", speechJoin(extractLines(E("div", [T("Red"), E("br"), T("Blue")]))), "Red. Blue.");
@@ -75,13 +90,17 @@ eq("paragraphs pause", speechJoin(extractLines(E("div", [E("p", [T("A")]), E("p"
 eq("no phantom pause on inline whitespace",
    speechJoin(extractLines(E("div", [E("span", [T("foo")]), T("\n     "), E("span", [T("bar")])]))), "foo bar.");
 eq("existing punctuation kept", speechJoin(extractLines(E("div", [T("apples,"), E("br"), T("oranges")]))), "apples, oranges.");
+// table cells are separate spoken lines, not one run-on phrase
+eq("table cells pause",
+   speechJoin(extractLines(E("table", [E("tr", [E("td", [T("Paris")]), E("td", [T("France")])])]))),
+   "Paris. France.");
 
 // <small> and our own av-* UI are excluded from spoken text
 eq("small + av-* excluded",
    extractLines(E("body", [
      E("div", [T("Q text")]),
      E("small", [T("hidden hint")]),
-     E("div", [T("\u2699")], "av-gear"),
+     E("div", [T("⚙")], "av-gear"),
      E("div", [T("AnkiVoice")], "av-root"),
    ])),
    ["Q text"]);
@@ -100,10 +119,26 @@ eq("small + av-* excluded",
      subtractLines(extractLines(back), extractLines(front)), ["Victoria"]);
 })();
 
+// ---------------- normalization ----------------
+eq("normalize folds accents", normalize("Café"), "cafe");
+eq("normalize strips punctuation", normalize("OK, yes!"), "ok yes");
+eq("normalize keeps other scripts", normalize("Привет"), "привет");
+eq("normalize keeps digits", normalize("Room 101."), "room 101");
+
 // ---------------- spoken-answer matching (conservative) ----------------
 ok("answerMatches exact", answerMatches("bamako", ["Bamako"]) === true);
 ok("answerMatches wrong", answerMatches("mali", ["Bamako"]) === false);
 ok("answerMatches not-in-long-sentence", answerMatches("guinea", ["Flag similar to Guinea and red flipped darker"]) === false);
+ok("answerMatches accent-insensitive", answerMatches("cafe", ["Café"]) === true);
+
+// The recognizer returns competing hypotheses. Each must be tested on its own:
+// concatenating them (pre-v29) produced a phrase that matched nothing.
+(() => {
+  const hyps = ["bamboo", "bamako", "bam ako"];
+  ok("anyAnswerMatches picks the right hypothesis", anyAnswerMatches(hyps, ["Bamako"]) === true);
+  ok("joined hypotheses match nothing (the v29 bug)", answerMatches(hyps.join(" "), ["Bamako"]) === false);
+  ok("anyAnswerMatches stays wrong when it should", anyAnswerMatches(["mali", "molly"], ["Bamako"]) === false);
+})();
 
 // ---------------- editable command vocab ----------------
 CFG = { words_hard: "hard, harder, heart", words_answer: "answer, reveal", words_good: "good, yes" };
@@ -111,8 +146,32 @@ ok("said built-in hard", said(heardOf("hard"), "hard") === true);
 ok("said homophone heart", said(heardOf("heart"), "hard") === true);
 ok("said reveal->answer", said(heardOf("reveal"), "answer") === true);
 ok("said no false match", said(heardOf("banana"), "hard") === false);
+ok("said accepts a hypothesis array", said(["art", "heart"], "hard") === true);
+ok("said array with no match", said(["banana", "bandana"], "hard") === false);
+ok("said tolerates punctuation", said(["Hard."], "hard") === true);
+ok("said tolerates case", said(["HARD"], "hard") === true);
 CFG = { words_hard: "hard, harv, hard one" };
 ok("said user-added word", said(heardOf("harv"), "hard") === true);
 ok("said user-added phrase", said(heardOf("hard one"), "hard") === true);
+// a multi-word trigger must live inside ONE hypothesis, not be stitched across two
+CFG = { words_hard: "hard one" };
+ok("said matches a phrase within one hypothesis", said(["hard one"], "hard") === true);
+ok("said does not stitch hypotheses", said(["hard", "one"], "hard") === false);
+CFG = { words_hard: "  hard , , heart  " };
+ok("said ignores blank vocab entries", said(heardOf("heart"), "hard") === true);
+ok("said blank entry matches nothing", said(heardOf("banana"), "hard") === false);
+
+// ---------------- version consistency ----------------
+(() => {
+  const header = src.match(/^\s*VERSION:\s*(\d+)\s*$/m);
+  ok("header declares a VERSION", !!header);
+  const v = header[1];
+  ok("header changelog leads with v" + v, new RegExp("CHANGELOG:\\s*\\n\\s*v" + v + " -").test(src));
+  const cur = changelog.match(/^Current:\s*\*\*v(\d+)\*\*\s*$/m);
+  ok("CHANGELOG.md declares a current version", !!cur);
+  eq("CHANGELOG.md current matches the header", cur[1], v);
+  const first = changelog.match(/^## v(\d+)\s*$/m);
+  eq("CHANGELOG.md's newest entry matches the header", first[1], v);
+})();
 
 console.log("\nAll " + passed + " assertions passed.");

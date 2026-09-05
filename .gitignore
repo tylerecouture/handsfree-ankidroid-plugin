@@ -8,6 +8,7 @@ __pycache__/
 venv/
 # node
 node_modules/
+package-lock.json
 # os / editors
 .DS_Store
 Thumbs.db
