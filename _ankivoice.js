@@ -3,11 +3,17 @@
    FILE: _ankivoice.js  -- filename is STABLE; never rename it. To update, replace
    THIS FILE'S CONTENTS in collection.media (desktop) and sync. Versions below.
 
-   VERSION: 29
+   VERSION: 30
 
    SETTINGS: see the CFG block below.
 
    CHANGELOG:
+     v30 - the running version is now visible on the phone: the bar reads
+           "AnkiVoice v30" before a card starts, the off state shows it, and the
+           settings panel header carries it. Without this there was no way to
+           tell which script was actually loaded - and importing the demo .apkg
+           over an existing install does NOT replace _ankivoice.js (Anki renames
+           the colliding media file), so the old one keeps running silently.
      v29 - fixes: "detect spoken answers" now tests each recognizer hypothesis
            separately (joining them made a word salad that matched nothing, and
            overshot the word limit - the feature never really worked); a bad
@@ -87,6 +93,11 @@
 
    PLATFORM: needs AnkiDroid's JS API; on Desktop/AnkiWeb the bar hides itself. */
 (function () {
+  // Must match the VERSION in the header comment above; a test asserts they agree.
+  // The point is to be able to tell, on the phone, which script is actually
+  // running - media-name collisions make that genuinely ambiguous otherwise.
+  var AV_VERSION = 30;
+
   // ---------------- settings ----------------
   var CFG = {
     thinkDelayQuestionMs: 3000, // quiet time after the question before the mic opens
@@ -136,7 +147,7 @@
     "font-size:17px;font-weight:600;text-align:center;z-index:10000;" +
     "background:rgba(35,35,35,.94);color:#fff;pointer-events:auto;cursor:pointer;" +
     "user-select:none;-webkit-user-select:none;box-shadow:0 -1px 6px rgba(0,0,0,.4);";
-  stat.textContent = "\uD83D\uDD0A  AnkiVoice";
+  stat.textContent = "\uD83D\uDD0A  AnkiVoice v" + AV_VERSION;
   (document.body || document.documentElement).appendChild(stat);
 
   // Voice-test readout (shows what the recognizer heard); hidden unless enabled.
@@ -169,7 +180,7 @@
 
   function on() { try { return localStorage.getItem("av_on") !== "0"; } catch (e) { return true; } }
   function S(m) { stat.textContent = (on() ? "\uD83D\uDD0A  " : "\uD83D\uDD07  ") + m; }
-  function paintOff() { stat.style.display = ""; stat.textContent = "\uD83D\uDD07  Voice off \u2014 tap to turn on"; }
+  function paintOff() { stat.style.display = ""; stat.textContent = "\uD83D\uDD07  Voice off (v" + AV_VERSION + ") \u2014 tap to turn on"; }
 
   window.addEventListener("error", function (e) { S("AV ERR: " + e.message + " ln" + e.lineno); });
   window.addEventListener("unhandledrejection", function (e) { S("AV REJ: " + e.reason); });
@@ -759,7 +770,7 @@
     ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100000;display:none;overflow:auto;padding:16px;box-sizing:border-box;";
     var box = document.createElement("div");
     box.style.cssText = "max-width:520px;margin:0 auto;background:#1e1e1e;color:#fff;border-radius:12px;padding:16px;";
-    var h = document.createElement("div"); h.textContent = "AnkiVoice settings";
+    var h = document.createElement("div"); h.textContent = "AnkiVoice settings \u00B7 v" + AV_VERSION;
     h.style.cssText = "font-size:20px;font-weight:700;margin-bottom:8px;text-align:center;";
     box.appendChild(h);
     var hint = document.createElement("div");
