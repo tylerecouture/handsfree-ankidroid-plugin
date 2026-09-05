@@ -135,6 +135,11 @@ answer → say "Mark it" → short delay → listen → a grade word calls
 2. `npm test` (or `node test/test.js` alone if jsdom isn't installed).
 3. Deploy: replace `_ankivoice.js` in `collection.media` (desktop), sync desktop,
    sync AnkiDroid. Verify on device.
+4. Merging the version bump to `main` publishes a GitHub release automatically
+   (tag `v<N>`, notes from that `CHANGELOG.md` section, with `_ankivoice.js` and
+   the built `.apkg` attached). Nothing to do by hand; re-running on an
+   unchanged version is a no-op. CI fails the PR if the bumped version has no
+   `CHANGELOG.md` section, so the release can never have empty notes.
 
 ## Open threads / roadmap
 
