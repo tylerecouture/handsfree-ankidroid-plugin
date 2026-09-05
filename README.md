@@ -58,7 +58,16 @@ templates again**. To update: replace `_ankivoice.js` in `collection.media`
 (overwrite it), then sync. Sync propagates the changed file to the phone.
 
 > Prefer to test first? `demo/build_apkg.py` builds a small `.apkg` test deck
-> (with the script bundled as media) that you can import on the phone.
+> (with the script bundled as media) that you can import on the phone. Every CI
+> run also attaches a freshly built one under **Artifacts**.
+>
+> **Caveat if you already have AnkiVoice installed:** importing the deck will
+> *not* replace your existing `_ankivoice.js`. Anki renames a colliding media
+> file rather than overwriting it, so the templates keep loading the copy you
+> already had and you end up testing the old script without noticing. The deck
+> is for a *first* look; to update an existing install, replace the file on
+> desktop and sync. Check which version is actually running by looking at the
+> bar ("AnkiVoice v30") or the settings panel header.
 
 ## Voice commands
 

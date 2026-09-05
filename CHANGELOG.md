@@ -2,7 +2,20 @@
 
 Versions are tracked in the header of `_ankivoice.js` and mirrored here.
 
-Current: **v29**
+Current: **v30**
+
+## v30
+
+Makes the running version visible on the phone.
+
+The bar reads "AnkiVoice v30" before a card starts, the off state shows it, and
+the settings panel header carries it. Until now nothing in the UI said which
+script was loaded, which mattered more than it sounds: **importing the demo
+`.apkg` over an existing install does not replace `_ankivoice.js`.** Anki renames
+a colliding media file instead of overwriting it, so the card templates keep
+loading the copy that was already there and the old script runs on, silently.
+A test keeps the displayed constant in step with the header comment and
+`CHANGELOG.md`.
 
 ## v29
 

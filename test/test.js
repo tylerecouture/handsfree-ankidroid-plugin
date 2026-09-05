@@ -166,6 +166,10 @@ ok("said blank entry matches nothing", said(heardOf("banana"), "hard") === false
   const header = src.match(/^\s*VERSION:\s*(\d+)\s*$/m);
   ok("header declares a VERSION", !!header);
   const v = header[1];
+  // the constant the UI displays must not drift from the header
+  const inCode = src.match(/^\s*var AV_VERSION = (\d+);/m);
+  ok("the script exposes AV_VERSION", !!inCode);
+  eq("AV_VERSION matches the header", inCode[1], v);
   ok("header changelog leads with v" + v, new RegExp("CHANGELOG:\\s*\\n\\s*v" + v + " -").test(src));
   const cur = changelog.match(/^Current:\s*\*\*v(\d+)\*\*\s*$/m);
   ok("CHANGELOG.md declares a current version", !!cur);
